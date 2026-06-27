@@ -40,18 +40,18 @@ app.get('/health', (_req, res) => {
 app.get('/stream', (req, res) => {
   const symbolsParam = String(req.query.symbols ?? '')
   const symbols = symbolsParam
-  .split(',')
-  .map((s) => s.trim().toUpperCase())
-  .filter(Boolean)
-  
+    .split(',')
+    .map((s) => s.trim().toUpperCase())
+    .filter(Boolean)
+
   if (!symbols.length) {
     return res.status(400).json({ error: 'Missing symbols query param' })
   }
-  
+
   for (const symbol of symbols) {
     finnhub.subscribe(symbol)
   }
-  
+
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Connection', 'keep-alive')
@@ -66,15 +66,15 @@ app.get('/stream', (req, res) => {
     symbols: new Set(symbols),
     res,
   }
-  
+
   clients.set(id, client)
-  
+
   sendSse(res, 'ready', { symbols })
-  
+
   const heartbeat = setInterval(() => {
     res.write(': keep-alive\n\n')
   }, 15000)
-  
+
   req.on('close', () => {
     clearInterval(heartbeat)
     clients.delete(id)
@@ -163,6 +163,61 @@ app.get('/quotes', async (req, res) => {
   } catch (error) {
     console.error('[quotes] failed to fetch initial quotes', error)
     res.status(500).json({ error: 'Failed to fetch quotes' })
+  }
+})
+
+app.get('/profiles', async (req, res) => {
+  const symbolsParam = String(req.query.symbols ?? '')
+  const symbols = symbolsParam
+    .split(',')
+    .map((s) => s.trim().toUpperCase())
+    .filter(Boolean)
+
+  if (!symbols.length) {
+    return res.status(400).json({ error: 'Missing symbols query param' })
+  }
+
+  try {
+    const profiles = await Promise.all(
+      symbols.map(async (symbol) => {
+        const response = await fetch(
+          `https://finnhub.io/api/v1/stock/profile2?symbol=${encodeURIComponent(symbol)}`,
+          {
+            headers: {
+              'X-Finnhub-Token': apiKey,
+            },
+          }
+        )
+
+        if (!response.ok) {
+          throw new Error(`Profile request failed for ${symbol}`)
+        }
+
+        const profile = await response.json()
+
+        return {
+          symbol,
+          name: profile.name ?? symbol,
+          ticker: profile.ticker ?? symbol,
+          currency: profile.currency ?? null,
+          exchange: profile.exchange ?? null,
+          finnhubIndustry: profile.finnhubIndustry ?? null,
+          logo: profile.logo ?? null,
+          marketCapitalization:
+            typeof profile.marketCapitalization === 'number'
+              ? profile.marketCapitalization
+              : null,
+          country: profile.country ?? null,
+          ipo: profile.ipo ?? null,
+          weburl: profile.weburl ?? null,
+        }
+      })
+    )
+
+    res.json({ profiles })
+  } catch (error) {
+    console.error('[profiles] failed to fetch company profiles', error)
+    res.status(500).json({ error: 'Failed to fetch company profiles' })
   }
 })
 
