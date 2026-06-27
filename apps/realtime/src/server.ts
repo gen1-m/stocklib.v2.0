@@ -221,6 +221,97 @@ app.get('/profiles', async (req, res) => {
   }
 })
 
+app.get('/asset', async (req, res) => {
+  const symbol = String(req.query.symbol ?? '').trim().toUpperCase()
+
+  if (!symbol) {
+    return res.status(400).json({ error: 'Missing symbol query param' })
+  }
+
+  const today = new Date()
+  const from = new Date(today)
+  from.setDate(today.getDate() - 7)
+
+  const toDate = today.toISOString().slice(0, 10)
+  const fromDate = from.toISOString().slice(0, 10)
+
+  try {
+    const [
+      profileResponse,
+      quoteResponse,
+      newsResponse,
+      basicFinancialsResponse,
+      financialsReportedResponse,
+      recommendationsResponse,
+    ] = await Promise.all([
+      fetch(
+        `https://finnhub.io/api/v1/stock/profile2?symbol=${encodeURIComponent(symbol)}`,
+        { headers: { 'X-Finnhub-Token': apiKey } }
+      ),
+      fetch(
+        `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}`,
+        { headers: { 'X-Finnhub-Token': apiKey } }
+      ),
+      fetch(
+        `https://finnhub.io/api/v1/company-news?symbol=${encodeURIComponent(symbol)}&from=${fromDate}&to=${toDate}`,
+        { headers: { 'X-Finnhub-Token': apiKey } }
+      ),
+      fetch(
+        `https://finnhub.io/api/v1/stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all`,
+        { headers: { 'X-Finnhub-Token': apiKey } }
+      ),
+      fetch(
+        `https://finnhub.io/api/v1/stock/financials-reported?symbol=${encodeURIComponent(symbol)}`,
+        { headers: { 'X-Finnhub-Token': apiKey } }
+      ),
+      fetch(
+        `https://finnhub.io/api/v1/stock/recommendation?symbol=${encodeURIComponent(symbol)}`,
+        { headers: { 'X-Finnhub-Token': apiKey } }
+      ),
+    ])
+
+    if (
+      !profileResponse.ok ||
+      !quoteResponse.ok ||
+      !newsResponse.ok ||
+      !basicFinancialsResponse.ok ||
+      !financialsReportedResponse.ok ||
+      !recommendationsResponse.ok
+    ) {
+      throw new Error(`Failed to fetch asset data for ${symbol}`)
+    }
+
+    const [
+      profile,
+      quote,
+      news,
+      basicFinancials,
+      financialsReported,
+      recommendations,
+    ] = await Promise.all([
+      profileResponse.json(),
+      quoteResponse.json(),
+      newsResponse.json(),
+      basicFinancialsResponse.json(),
+      financialsReportedResponse.json(),
+      recommendationsResponse.json(),
+    ])
+
+    res.json({
+      symbol,
+      profile,
+      quote,
+      news,
+      basicFinancials,
+      financialsReported,
+      recommendations,
+    })
+  } catch (error) {
+    console.error('[asset] failed to fetch asset details', error)
+    res.status(500).json({ error: 'Failed to fetch asset details' })
+  }
+})
+
 finnhub.onUpdate((update: TickerUpdate) => {
   for (const client of clients.values()) {
     if (!client.symbols.has(update.symbol)) continue
