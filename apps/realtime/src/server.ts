@@ -1,5 +1,6 @@
 import 'dotenv/config'
 import { randomUUID } from 'node:crypto'
+import type { Server } from 'node:http'
 import cors from 'cors'
 import express from 'express'
 import { FinnhubStream } from './finnhub.ts'
@@ -19,7 +20,6 @@ app.use(cors({ origin: corsOrigin }))
 const finnhub = new FinnhubStream(apiKey)
 finnhub.connect()
 
-
 type Client = {
   id: string
   symbols: Set<string>
@@ -31,6 +31,34 @@ const clients = new Map<string, Client>()
 function sendSse(res: express.Response, event: string, data: unknown) {
   res.write(`event: ${event}\n`)
   res.write(`data: ${JSON.stringify(data)}\n\n`)
+}
+
+async function fetchFinnhub(path: string, fallback?: unknown) {
+  try {
+    const response = await fetch(`https://finnhub.io/api/v1/${path}`, {
+      headers: {
+        'X-Finnhub-Token': process.env.FINNHUB_API_KEY!,
+      },
+    })
+
+    if (!response.ok) {
+      if (fallback !== undefined) {
+        console.warn(`[finnhub] ${path} failed: ${response.status}`)
+        return fallback
+      }
+
+      throw new Error(`Finnhub request failed: ${path} (${response.status})`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    if (fallback !== undefined) {
+      console.warn(`[finnhub] ${path} crashed`, error)
+      return fallback
+    }
+
+    throw error
+  }
 }
 
 app.get('/health', (_req, res) => {
@@ -80,6 +108,7 @@ app.get('/stream', (req, res) => {
     clients.delete(id)
     res.end()
   })
+
   console.log('[sse] client connected for symbols:', symbols)
 })
 
@@ -87,20 +116,9 @@ app.get('/market-status', async (req, res) => {
   const exchange = String(req.query.exchange ?? 'US').toUpperCase()
 
   try {
-    const response = await fetch(
-      `https://finnhub.io/api/v1/stock/market-status?exchange=${encodeURIComponent(exchange)}`,
-      {
-        headers: {
-          'X-Finnhub-Token': apiKey,
-        },
-      }
+    const data = await fetchFinnhub(
+      `stock/market-status?exchange=${encodeURIComponent(exchange)}`
     )
-
-    if (!response.ok) {
-      throw new Error(`Market status request failed for ${exchange}`)
-    }
-
-    const data = await response.json()
 
     res.json({
       exchange: data.exchange ?? exchange,
@@ -130,20 +148,7 @@ app.get('/quotes', async (req, res) => {
   try {
     const quotes = await Promise.all(
       symbols.map(async (symbol) => {
-        const response = await fetch(
-          `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}`,
-          {
-            headers: {
-              'X-Finnhub-Token': apiKey,
-            },
-          }
-        )
-
-        if (!response.ok) {
-          throw new Error(`Quote request failed for ${symbol}`)
-        }
-
-        const quote = await response.json()
+        const quote = await fetchFinnhub(`quote?symbol=${encodeURIComponent(symbol)}`)
 
         return {
           symbol,
@@ -180,20 +185,9 @@ app.get('/profiles', async (req, res) => {
   try {
     const profiles = await Promise.all(
       symbols.map(async (symbol) => {
-        const response = await fetch(
-          `https://finnhub.io/api/v1/stock/profile2?symbol=${encodeURIComponent(symbol)}`,
-          {
-            headers: {
-              'X-Finnhub-Token': apiKey,
-            },
-          }
+        const profile = await fetchFinnhub(
+          `stock/profile2?symbol=${encodeURIComponent(symbol)}`
         )
-
-        if (!response.ok) {
-          throw new Error(`Profile request failed for ${symbol}`)
-        }
-
-        const profile = await response.json()
 
         return {
           symbol,
@@ -234,53 +228,9 @@ app.get('/asset', async (req, res) => {
 
   const toDate = today.toISOString().slice(0, 10)
   const fromDate = from.toISOString().slice(0, 10)
+  const encodedSymbol = encodeURIComponent(symbol)
 
   try {
-    const [
-      profileResponse,
-      quoteResponse,
-      newsResponse,
-      basicFinancialsResponse,
-      financialsReportedResponse,
-      recommendationsResponse,
-    ] = await Promise.all([
-      fetch(
-        `https://finnhub.io/api/v1/stock/profile2?symbol=${encodeURIComponent(symbol)}`,
-        { headers: { 'X-Finnhub-Token': apiKey } }
-      ),
-      fetch(
-        `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}`,
-        { headers: { 'X-Finnhub-Token': apiKey } }
-      ),
-      fetch(
-        `https://finnhub.io/api/v1/company-news?symbol=${encodeURIComponent(symbol)}&from=${fromDate}&to=${toDate}`,
-        { headers: { 'X-Finnhub-Token': apiKey } }
-      ),
-      fetch(
-        `https://finnhub.io/api/v1/stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all`,
-        { headers: { 'X-Finnhub-Token': apiKey } }
-      ),
-      fetch(
-        `https://finnhub.io/api/v1/stock/financials-reported?symbol=${encodeURIComponent(symbol)}`,
-        { headers: { 'X-Finnhub-Token': apiKey } }
-      ),
-      fetch(
-        `https://finnhub.io/api/v1/stock/recommendation?symbol=${encodeURIComponent(symbol)}`,
-        { headers: { 'X-Finnhub-Token': apiKey } }
-      ),
-    ])
-
-    if (
-      !profileResponse.ok ||
-      !quoteResponse.ok ||
-      !newsResponse.ok ||
-      !basicFinancialsResponse.ok ||
-      !financialsReportedResponse.ok ||
-      !recommendationsResponse.ok
-    ) {
-      throw new Error(`Failed to fetch asset data for ${symbol}`)
-    }
-
     const [
       profile,
       quote,
@@ -289,26 +239,93 @@ app.get('/asset', async (req, res) => {
       financialsReported,
       recommendations,
     ] = await Promise.all([
-      profileResponse.json(),
-      quoteResponse.json(),
-      newsResponse.json(),
-      basicFinancialsResponse.json(),
-      financialsReportedResponse.json(),
-      recommendationsResponse.json(),
+      fetchFinnhub(`stock/profile2?symbol=${encodedSymbol}`, {}),
+      fetchFinnhub(`quote?symbol=${encodedSymbol}`, {}),
+      fetchFinnhub(
+        `company-news?symbol=${encodedSymbol}&from=${fromDate}&to=${toDate}`,
+        []
+      ),
+      fetchFinnhub(`stock/metric?symbol=${encodedSymbol}&metric=all`, { metric: {} }),
+      fetchFinnhub(`stock/financials-reported?symbol=${encodedSymbol}`, { data: [] }),
+      fetchFinnhub(`stock/recommendation?symbol=${encodedSymbol}`, []),
     ])
 
     res.json({
       symbol,
       profile,
       quote,
-      news,
+      news: Array.isArray(news) ? news : [],
       basicFinancials,
       financialsReported,
-      recommendations,
+      recommendations: Array.isArray(recommendations) ? recommendations : [],
     })
   } catch (error) {
     console.error('[asset] failed to fetch asset details', error)
     res.status(500).json({ error: 'Failed to fetch asset details' })
+  }
+})
+
+app.get('/search', async (req, res) => {
+  const q = String(req.query.q ?? '').trim()
+
+  if (!q) {
+    return res.json({
+      query: '',
+      assets: [],
+      news: [],
+    })
+  }
+
+  try {
+    const searchData = await fetchFinnhub(`search?q=${encodeURIComponent(q)}`)
+    const rawResults = Array.isArray(searchData.result) ? searchData.result : []
+
+    const assets = rawResults.slice(0, 8).map((item: any) => ({
+      description: item.description ?? '',
+      displaySymbol: item.displaySymbol ?? item.symbol ?? '',
+      symbol: item.symbol ?? '',
+      type: item.type ?? '',
+    }))
+
+    const topSymbol = assets[0]?.symbol
+    let news: any[] = []
+
+    if (topSymbol) {
+      const today = new Date()
+      const from = new Date(today)
+      from.setDate(today.getDate() - 7)
+
+      const toDate = today.toISOString().slice(0, 10)
+      const fromDate = from.toISOString().slice(0, 10)
+
+      const newsData = await fetchFinnhub(
+        `company-news?symbol=${encodeURIComponent(topSymbol)}&from=${fromDate}&to=${toDate}`,
+        []
+      )
+
+      news = Array.isArray(newsData)
+        ? newsData.slice(0, 6).map((item: any) => ({
+            id: item.id,
+            category: item.category ?? '',
+            datetime: item.datetime ?? null,
+            headline: item.headline ?? '',
+            related: item.related ?? '',
+            source: item.source ?? '',
+            summary: item.summary ?? '',
+            url: item.url ?? '',
+          }))
+        : []
+    }
+
+    res.json({
+      query: q,
+      assets,
+      news,
+      topSymbol: topSymbol ?? null,
+    })
+  } catch (error) {
+    console.error('[search] failed to search assets', error)
+    res.status(500).json({ error: 'Failed to search assets' })
   }
 })
 
@@ -326,6 +343,6 @@ finnhub.onUpdate((update: TickerUpdate) => {
   }
 })
 
-app.listen(port, () => {
+const server: Server = app.listen(port, () => {
   console.log(`Realtime service listening on http://localhost:${port}`)
 })
