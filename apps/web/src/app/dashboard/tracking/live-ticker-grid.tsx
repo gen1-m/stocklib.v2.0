@@ -2,8 +2,14 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { TickerCard } from './ticker-card'
-import type { QuotesResponse, Ticker, TickerUpdate } from './ticker-types'
+import type {
+  ProfilesResponse,
+  QuotesResponse,
+  Ticker,
+  TickerUpdate,
+} from './ticker-types'
 import {
+  applyProfile,
   applyQuote,
   applyUpdate,
   buildTickerUrl,
@@ -29,6 +35,14 @@ export function LiveTickerGrid({ initialSymbols }: LiveTickerGridProps) {
     return buildTickerUrl(realtimeBase, 'quotes', initialSymbols)
   }, [realtimeBase, initialSymbols])
 
+  const profilesUrl = useMemo(() => {
+    if (!realtimeBase) {
+      throw new Error('Missing NEXT_PUBLIC_REALTIME_URL')
+    }
+
+    return buildTickerUrl(realtimeBase, 'profiles', initialSymbols)
+  }, [realtimeBase, initialSymbols])
+
   const streamUrl = useMemo(() => {
     if (!realtimeBase) {
       throw new Error('Missing NEXT_PUBLIC_REALTIME_URL')
@@ -40,21 +54,39 @@ export function LiveTickerGrid({ initialSymbols }: LiveTickerGridProps) {
   useEffect(() => {
     let cancelled = false
 
-    async function loadQuotes() {
+    async function loadInitialData() {
       try {
-        const response = await fetch(quotesUrl)
+        const [quotesResponse, profilesResponse] = await Promise.all([
+          fetch(quotesUrl),
+          fetch(profilesUrl),
+        ])
 
-        if (!response.ok) {
+        if (!quotesResponse.ok) {
           throw new Error('Failed to load quotes')
         }
 
-        const data = (await response.json()) as QuotesResponse
+        if (!profilesResponse.ok) {
+          throw new Error('Failed to load profiles')
+        }
+
+        const quotesData = (await quotesResponse.json()) as QuotesResponse
+        const profilesData = (await profilesResponse.json()) as ProfilesResponse
+
         if (cancelled) return
 
-        const quoteMap = new Map(data.quotes.map((quote) => [quote.symbol, quote]))
+        const quoteMap = new Map(
+          quotesData.quotes.map((quote) => [quote.symbol, quote])
+        )
+
+        const profileMap = new Map(
+          profilesData.profiles.map((profile) => [profile.symbol, profile])
+        )
 
         setTickers((current) =>
-          current.map((ticker) => applyQuote(ticker, quoteMap.get(ticker.symbol)))
+          current.map((ticker) => {
+            const withQuote = applyQuote(ticker, quoteMap.get(ticker.symbol))
+            return applyProfile(withQuote, profileMap.get(ticker.symbol))
+          })
         )
       } catch {
         if (cancelled) return
@@ -67,12 +99,12 @@ export function LiveTickerGrid({ initialSymbols }: LiveTickerGridProps) {
       }
     }
 
-    loadQuotes()
+    loadInitialData()
 
     return () => {
       cancelled = true
     }
-  }, [quotesUrl])
+  }, [quotesUrl, profilesUrl])
 
   useEffect(() => {
     const source = new EventSource(streamUrl)

@@ -1,7 +1,27 @@
 export type TickerStatus = 'live' | 'waiting' | 'error'
 
+export type CompanyProfile = {
+  symbol: string
+  name: string
+  ticker: string
+  currency: string | null
+  exchange: string | null
+  finnhubIndustry: string | null
+  logo: string | null
+  marketCapitalization: number | null
+  country: string | null
+  ipo: string | null
+  weburl: string | null
+}
+
 export type Ticker = {
   symbol: string
+  name?: string
+  ticker?: string
+  currency?: string | null
+  exchange?: string | null
+  finnhubIndustry?: string | null
+  logo?: string | null
   price: number | null
   change?: number | null
   percentChange?: number | null
@@ -35,6 +55,10 @@ export type TickerUpdate = {
 
 export type QuotesResponse = {
   quotes: Quote[]
+}
+
+export type ProfilesResponse = {
+  profiles: CompanyProfile[]
 }
 
 export type MarketStatus = {

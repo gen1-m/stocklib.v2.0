@@ -1,8 +1,15 @@
-import type { Quote, Ticker, TickerUpdate } from './ticker-types'
+import type {
+  CompanyProfile,
+  Quote,
+  Ticker,
+  TickerUpdate,
+} from './ticker-types'
 
 export function createInitialTickers(symbols: string[]): Ticker[] {
   return symbols.map((symbol) => ({
     symbol,
+    name: symbol,
+    ticker: symbol,
     price: null,
     status: 'waiting',
   }))
@@ -10,7 +17,7 @@ export function createInitialTickers(symbols: string[]): Ticker[] {
 
 export function buildTickerUrl(
   base: string,
-  path: 'quotes' | 'stream',
+  path: 'quotes' | 'stream' | 'profiles',
   symbols: string[]
 ) {
   const params = encodeURIComponent(symbols.join(','))
@@ -34,6 +41,20 @@ export function applyQuote(ticker: Ticker, quote?: Quote): Ticker {
   }
 }
 
+export function applyProfile(ticker: Ticker, profile?: CompanyProfile): Ticker {
+  if (!profile) return ticker
+
+  return {
+    ...ticker,
+    name: profile.name,
+    ticker: profile.ticker,
+    currency: profile.currency,
+    exchange: profile.exchange,
+    finnhubIndustry: profile.finnhubIndustry,
+    logo: profile.logo,
+  }
+}
+
 export function applyUpdate(ticker: Ticker, update: TickerUpdate): Ticker {
   if (ticker.symbol !== update.symbol) return ticker
 
@@ -54,7 +75,12 @@ export function getPercentChangeClass(percentChange?: number | null) {
   return percentChange >= 0 ? 'text-green-500' : 'text-red-500'
 }
 
-export function formatPrice(price: number | null) {
+export function formatPrice(price: number | null, currency?: string | null) {
+  if (price === null) return '—'
+  return `${price.toFixed(2)}${currency ? ` ${currency}` : ''}`
+}
+
+export function formatPlainPrice(price: number | null) {
   return price !== null ? price.toFixed(2) : '—'
 }
 
