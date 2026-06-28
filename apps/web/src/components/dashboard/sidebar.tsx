@@ -3,7 +3,7 @@ import { NavLinks } from "./nav-links";
 
 export function Sidebar() {
   return (
-    <aside className="hidden w-72 shrink-0 border-r border-border bg-surface lg:block">
+    <aside className="hidden w-72 shrink-0 border-r border-border bg-surface lg:block h-full">
       <div className="flex h-full flex-col px-5 py-6">
         <Link href="/" className="text-xl font-semibold tracking-tight">
           StockLib

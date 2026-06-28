@@ -1,14 +1,21 @@
-import { SectionCard } from "@/components/dashboard/section-card";
+import { LiveTickerGrid } from './live-ticker-grid'
+import { MarketStatusBanner } from './market-status-banner'
 
 export default function TrackingPage() {
   return (
-    <SectionCard
-      title="Tracking"
-      description="Use this page for market movers, sectors, indices, and macro context."
-    >
-      <p className="text-sm text-muted">
-        A heatmap, movers list, and headline stream would fit well here.
-      </p>
-    </SectionCard>
-  );
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold">Tracking</h1>
+        <p className="text-sm text-muted-foreground">
+          Live ticker updates streamed from the realtime service.
+        </p>
+      </div>
+
+      <MarketStatusBanner exchange="US" />
+
+      <LiveTickerGrid
+        initialSymbols={['AAPL', 'MSFT', 'NVDA', 'AMZN', 'META', 'TSLA']}
+      />
+    </div>
+  )
 }
