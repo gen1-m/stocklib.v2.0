@@ -2,19 +2,16 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
-      - develop
-      - "feature/**"
+    branches: [main]
   pull_request:
-    branches:
-      - main
-      - develop
+    branches: [main]
 
 jobs:
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_REALTIME_URL: ${{ secrets.NEXT_PUBLIC_REALTIME_URL }}
 
     steps:
       - name: Checkout repository
