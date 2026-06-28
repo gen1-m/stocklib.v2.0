@@ -69,15 +69,20 @@ export function applyUpdate(ticker: Ticker, update: TickerUpdate): Ticker {
 
 export function getPercentChangeClass(percentChange?: number | null) {
   if (percentChange === null || percentChange === undefined) {
-    return 'text-muted-foreground'
+    return 'text-muted'
   }
 
   return percentChange >= 0 ? 'text-green-500' : 'text-red-500'
 }
 
-export function formatPrice(price: number | null, currency?: string | null) {
+export function getValueToneClass(value?: number | null) {
+  if (value === null || value === undefined) return 'text-foreground'
+  return value >= 0 ? 'text-green-500' : 'text-red-500'
+}
+
+export function formatPrice(price: number | null | undefined, currency?: string | null) {
   if (price === null) return '—'
-  return `${price.toFixed(2)}${currency ? ` ${currency}` : ''}`
+  return `${price?.toFixed(2)}${currency ? ` ${currency}` : ''}`
 }
 
 export function formatPlainPrice(price: number | null) {
@@ -108,4 +113,29 @@ export function formatTimestamp(timestamp?: number) {
   }
 
   return `Last updated: ${new Date(timestamp).toLocaleTimeString()}`
+}
+
+export function formatNumber(value?: number | null) {
+  if (value === null || value === undefined) return '—'
+  return value.toLocaleString()
+}
+
+export function formatPercent(value?: number | null) {
+  if (value === null || value === undefined) return '—'
+  return `${value.toFixed(2)}%`
+}
+
+export function formatDate(value?: string | number) {
+  if (!value) return '—'
+
+  const date =
+    typeof value === 'number' ? new Date(value * 1000) : new Date(value)
+
+  if (Number.isNaN(date.getTime())) return '—'
+  return date.toLocaleDateString()
+}
+
+export function formatDateTimeFromUnix(value?: number) {
+  if (!value) return '—'
+  return new Date(value * 1000).toLocaleString()
 }
