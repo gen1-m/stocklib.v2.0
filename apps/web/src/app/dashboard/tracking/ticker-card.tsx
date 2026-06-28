@@ -55,7 +55,7 @@ export function TickerCard({ ticker }: TickerCardProps) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <Link
-            href={`/dashboard/tracking/${ticker.symbol}`}
+            href={`/dashboard/tracking/${encodeURIComponent(ticker.symbol)}`}
             className="line-clamp-1 text-sm font-semibold hover:underline"
           >
             {companyName} <span className="text-muted-foreground">({companyTicker})</span>
