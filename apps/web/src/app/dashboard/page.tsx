@@ -1,26 +1,132 @@
 import { SectionCard } from "@/components/dashboard/section-card";
 import { StatCard } from "@/components/dashboard/stat-card";
+import { createClient } from "@/lib/supabase/server";
+import { RefreshWatchlistForm } from "@/components/dashboard/refresh-watchlist-form";
+import {
+  getDefaultWatchlistSymbolsForUser,
+  refreshSymbols,
+} from "./actions";
+import { getStaleCutoffIso } from "@/lib/staleness";
 
-export default function DashboardPage() {
+type WatchlistItemWithCompany = {
+  id: string;
+  symbol: string;
+  added_at: string;
+  companies: {
+    symbol: string;
+    name: string;
+  } | null;
+};
+
+type PriceRow = {
+  symbol: string;
+  last_price: number | null;
+  change_percent: number | null;
+  fetched_at: string | null;
+};
+
+const STALE_MINUTES = 10;
+
+export default async function DashboardPage() {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { data: watchlist } = await supabase
+    .from("watchlists")
+    .select(`
+      id,
+      name,
+      watchlist_items (
+        id,
+        symbol,
+        added_at,
+        companies (
+          symbol,
+          name
+        )
+      )
+    `)
+    .eq("user_id", user!.id)
+    .eq("is_default", true)
+    .maybeSingle();
+
+  const trackedItems = (watchlist?.watchlist_items ?? []) as unknown as WatchlistItemWithCompany[];
+  const symbols = await getDefaultWatchlistSymbolsForUser(user!.id);
+
+  let { data: prices } = symbols.length
+    ? await supabase
+      .from("price_cache")
+      .select("symbol, last_price, change_percent, fetched_at")
+      .in("symbol", symbols)
+    : { data: [] as PriceRow[] };
+
+  const staleCutoffIso = getStaleCutoffIso(STALE_MINUTES);
+
+  const staleOrMissing = symbols.filter((symbol) => {
+    const row = (prices ?? []).find((price) => price.symbol === symbol);
+
+    if (!row?.fetched_at) return true;
+
+    return row.fetched_at < staleCutoffIso;
+  });
+
+  if (staleOrMissing.length) {
+    await refreshSymbols(staleOrMissing);
+
+    const refreshed = await supabase
+      .from("price_cache")
+      .select("symbol, last_price, change_percent, fetched_at")
+      .in("symbol", symbols);
+
+    prices = refreshed.data ?? [];
+  }
+
+  const priceMap = new Map((prices ?? []).map((row) => [row.symbol, row]));
+
+  const trackingRows = trackedItems.map((item) => {
+    const price = priceMap.get(item.symbol);
+
+    return {
+      id: item.id,
+      symbol: item.symbol,
+      name: item.companies?.name ?? item.symbol,
+      lastPrice: price?.last_price ?? null,
+      changePercent: price?.change_percent ?? null,
+    };
+  });
+
+
   return (
     <div className="space-y-6">
-      <section className="space-y-2">
-        <p className="text-sm font-medium uppercase tracking-[0.2em] text-muted">
-          Overview
-        </p>
-        <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
-          Market intelligence at a glance
-        </h1>
-        <p className="max-w-2xl text-sm text-muted md:text-base">
-          Track price movement, monitor your watchlist, and review signals from a
-          single dashboard.
-        </p>
+
+      <section className="space-y-3 md:flex md:items-end md:justify-between md:space-y-0">
+        <div className="space-y-2">
+          <p className="text-sm font-medium uppercase tracking-[0.2em] text-muted">
+            Overview
+          </p>
+          <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
+            Market intelligence at a glance
+          </h1>
+          <p className="max-w-2xl text-sm text-muted md:text-base">
+            Track price movement, monitor your watchlist, and review signals from a
+            single dashboard.
+          </p>
+        </div>
+
+        <RefreshWatchlistForm />
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Portfolio value" value="$124,320" change="+4.8% this month" />
         <StatCard label="Daily return" value="+$1,284" change="+1.1% today" />
-        <StatCard label="Watchlist movers" value="12" change="3 above target" />
+        <StatCard
+          label="Watchlist movers"
+          value={String(trackingRows.length)}
+          change="Tracked symbols"
+        />
         <StatCard label="Alerts triggered" value="3" change="2 unread" />
       </section>
 
@@ -49,32 +155,50 @@ export default function DashboardPage() {
         </SectionCard>
 
         <SectionCard
-          title="Tracking"
+          title={watchlist?.name ?? "Tracking"}
           description="Your highest-priority instruments for the next session."
         >
           <div className="space-y-3">
-            {[
-              ["NVDA", "$141.22", "+2.4%"],
-              ["MSFT", "$512.09", "+0.8%"],
-              ["TSLA", "$219.41", "-1.6%"],
-            ].map(([symbol, price, move]) => (
-              <div
-                key={symbol}
-                className="flex items-center justify-between rounded-xl border border-border bg-surface-2 px-4 py-3"
-              >
-                <div>
-                  <p className="font-medium font-sans">{symbol}</p>
-                  <p className="text-sm text-muted">{price}</p>
-                </div>
-                <p
-                  className={`text-sm font-medium ${
-                    move.startsWith("+") ? "text-success" : "text-danger"
-                  }`}
-                >
-                  {move}
-                </p>
+            {trackingRows.length ? (
+              trackingRows.map((item) => {
+                const isPositive =
+                  typeof item.changePercent === "number" && item.changePercent >= 0;
+
+                return (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between rounded-xl border border-border bg-surface-2 px-4 py-3"
+                  >
+                    <div>
+                      <p className="font-medium font-sans">{item.symbol}</p>
+                      <p className="text-sm text-muted">{item.name}</p>
+                    </div>
+
+                    <div className="text-right">
+                      <p className="text-sm font-medium">
+                        {item.lastPrice != null ? `$${item.lastPrice.toFixed(2)}` : "—"}
+                      </p>
+                      <p
+                        className={`text-sm font-medium ${item.changePercent == null
+                          ? "text-muted"
+                          : isPositive
+                            ? "text-success"
+                            : "text-danger"
+                          }`}
+                      >
+                        {item.changePercent != null
+                          ? `${isPositive ? "+" : ""}${item.changePercent.toFixed(2)}%`
+                          : "No change"}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="rounded-xl border border-border bg-surface-2 px-4 py-3 text-sm text-muted">
+                No symbols in your watchlist yet.
               </div>
-            ))}
+            )}
           </div>
         </SectionCard>
       </section>
