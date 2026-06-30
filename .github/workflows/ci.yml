@@ -41,5 +41,10 @@ jobs:
       - name: Typecheck
         run: pnpm type-check
 
+      - name: Check Supabase env presence
+        run: |
+          echo "SUPABASE_URL set: $([ -n "$NEXT_PUBLIC_SUPABASE_URL" ] && echo yes || echo no)"
+          echo "SUPABASE_PUBLISHABLE_KEY set: $([ -n "$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" ] && echo yes || echo no)"
+
       - name: Build
         run: pnpm build
