@@ -35,16 +35,23 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint
-        run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm type-check
-
       - name: Check Supabase env presence
         run: |
           echo "SUPABASE_URL set: $([ -n "$NEXT_PUBLIC_SUPABASE_URL" ] && echo yes || echo no)"
           echo "SUPABASE_PUBLISHABLE_KEY set: $([ -n "$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" ] && echo yes || echo no)"
-
+      
+      - name: Debug Supabase env shape
+        run: |
+          echo "URL length: ${#NEXT_PUBLIC_SUPABASE_URL}"
+          echo "KEY length: ${#NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}"
+          echo "URL prefix: ${NEXT_PUBLIC_SUPABASE_URL:0:24}"
+          echo "KEY prefix: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:0:16}"
+    
+      - name: Lint
+        run: pnpm lint
+      
+      - name: Typecheck
+        run: pnpm type-check
+    
       - name: Build
         run: pnpm build
