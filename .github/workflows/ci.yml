@@ -39,19 +39,31 @@ jobs:
         run: |
           echo "SUPABASE_URL set: $([ -n "$NEXT_PUBLIC_SUPABASE_URL" ] && echo yes || echo no)"
           echo "SUPABASE_PUBLISHABLE_KEY set: $([ -n "$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" ] && echo yes || echo no)"
-      
+
       - name: Debug Supabase env shape
         run: |
           echo "URL length: ${#NEXT_PUBLIC_SUPABASE_URL}"
           echo "KEY length: ${#NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}"
           echo "URL prefix: ${NEXT_PUBLIC_SUPABASE_URL:0:24}"
           echo "KEY prefix: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:0:16}"
-    
+
+      - name: Check env inside apps/web
+        working-directory: apps/web
+        run: |
+          node -e "console.log('url?', !!process.env.NEXT_PUBLIC_SUPABASE_URL)"
+          node -e "console.log('key?', !!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)"
+          
       - name: Lint
         run: pnpm lint
-      
+
       - name: Typecheck
         run: pnpm type-check
-    
+
       - name: Build
         run: pnpm build
+        env:
+          NEXT_PUBLIC_REALTIME_URL: ${{ secrets.NEXT_PUBLIC_REALTIME_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
