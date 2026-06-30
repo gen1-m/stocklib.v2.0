@@ -120,6 +120,12 @@ export function formatNumber(value?: number | null) {
   return value.toLocaleString()
 }
 
+export function formatMarketCap(value?: number | null) {
+  if (value === null || value === undefined) return '—'
+  value = value * 1_000_000
+  return value.toLocaleString('en-US', {style: 'currency', currency: 'USD', compactDisplay: 'short', notation: 'compact'})
+}
+
 export function formatPercent(value?: number | null) {
   if (value === null || value === undefined) return '—'
   return `${value.toFixed(2)}%`
