@@ -4,6 +4,7 @@ import type { AssetDetailsResponse } from '../asset-types'
 import {
   formatDate,
   formatDateTimeFromUnix,
+  formatMarketCap,
   formatNumber,
   formatPercent,
   formatPercentChange,
@@ -276,7 +277,7 @@ export default async function AssetDetailPage({ params }: PageProps) {
           <div className="mt-5 rounded-2xl border border-border/70 bg-surface-2 px-4">
             <DetailRow
               label="Market cap"
-              value={formatNumber(profile.marketCapitalization)}
+              value={formatMarketCap(profile.marketCapitalization)}
             />
             <DetailRow label="IPO date" value={formatDate(profile.ipo)} />
             <DetailRow label="Country" value={profile.country ?? '—'} />
