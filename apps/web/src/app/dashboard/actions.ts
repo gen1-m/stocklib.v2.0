@@ -4,7 +4,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { adminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 import type { RefreshWatchlistState } from "./refresh-watchlist-state";
 
 type FinnhubProfile = {
@@ -40,6 +40,8 @@ async function fetchJson<T>(url: string): Promise<T> {
 }
 
 export async function refreshSymbols(symbols: string[]) {
+  const adminClient = getAdminClient();
+
   const normalizedSymbols = Array.from(
     new Set(symbols.map((symbol) => symbol?.trim().toUpperCase()).filter(Boolean))
   );
