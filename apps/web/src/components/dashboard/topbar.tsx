@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 
 type SearchAsset = {
   description: string
@@ -29,7 +30,11 @@ type SearchResponse = {
   topSymbol: string | null
 }
 
-export function Topbar() {
+type TopbarProps = {
+  userEmail?: string | null
+}
+
+export function Topbar({ userEmail }: TopbarProps) {
   const router = useRouter()
   const containerRef = useRef<HTMLDivElement | null>(null)
 
@@ -37,6 +42,7 @@ export function Topbar() {
   const [results, setResults] = useState<SearchResponse | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
+  const [isSigningOut, setIsSigningOut] = useState(false)
 
   const trimmedQuery = query.trim()
   const hasQuery = trimmedQuery.length > 0
@@ -118,12 +124,34 @@ export function Topbar() {
     }
   }
 
+  async function handleSignOut() {
+    try {
+      setIsSigningOut(true)
+
+      const supabase = createClient()
+      const { error } = await supabase.auth.signOut()
+
+      if (error) {
+        console.error('[auth] sign out failed', error)
+        return
+      }
+
+      router.push('/auth/sign-in')
+      router.refresh()
+    } finally {
+      setIsSigningOut(false)
+    }
+  }
+
   return (
     <header className="border-b border-border bg-background/80 px-4 py-4 backdrop-blur-xl md:px-6 lg:px-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-sm uppercase tracking-[0.2em] text-muted">Dashboard</p>
           <h2 className="mt-1 text-xl font-semibold tracking-tight">Overview</h2>
+          {userEmail ? (
+            <p className="mt-1 text-sm text-muted">{userEmail}</p>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-3">
@@ -184,7 +212,7 @@ export function Topbar() {
                       </section>
                     )}
 
-                    {!!results?.news?.length && (
+                    {!!results.news.length && (
                       <section>
                         <p className="px-2 pb-2 text-xs uppercase tracking-[0.18em] text-muted">
                           Related news
@@ -222,8 +250,20 @@ export function Topbar() {
             Landing page
           </Link>
 
-          <button className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90">
+          <button
+            type="button"
+            className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+          >
             New alert
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSignOut}
+            disabled={isSigningOut}
+            className="rounded-full border border-border px-4 py-2 text-sm transition hover:bg-surface disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSigningOut ? 'Signing out…' : 'Sign out'}
           </button>
         </div>
       </div>
