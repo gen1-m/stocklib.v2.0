@@ -1,4 +1,5 @@
-export type TickerStatus = 'live' | 'waiting' | 'error'
+export type TickerStatus = 'live' | 'waiting' | 'reconnecting' | 'error'
+export type PendingTickerUpdates = Record<string, TickerUpdate>
 
 export type CompanyProfile = {
   symbol: string
@@ -16,33 +17,37 @@ export type CompanyProfile = {
 
 export type Ticker = {
   symbol: string
-  name?: string
-  ticker?: string
-  currency?: string | null
-  exchange?: string | null
-  finnhubIndustry?: string | null
-  logo?: string | null
+  name: string | null
+  ticker: string | null
+  currency: string | null
+  exchange: string | null
+  finnhubIndustry: string | null
+  logo: string | null
+  marketCapitalization: number | null
+  country: string | null
+  ipo: string | null
+  weburl: string | null
   price: number | null
-  change?: number | null
-  percentChange?: number | null
-  high?: number | null
-  low?: number | null
-  open?: number | null
-  previousClose?: number | null
-  timestamp?: number
-  volume?: number
+  change: number | null
+  percentChange: number | null
+  high: number | null
+  low: number | null
+  open: number | null
+  previousClose: number | null
+  timestamp: number | null
+  volume: number | null
   status: TickerStatus
 }
 
 export type Quote = {
   symbol: string
   price: number | null
-  change?: number | null
-  percentChange?: number | null
-  high?: number | null
-  low?: number | null
-  open?: number | null
-  previousClose?: number | null
+  change: number | null
+  percentChange: number | null
+  high: number | null
+  low: number | null
+  open: number | null
+  previousClose: number | null
   timestamp?: number
 }
 
@@ -52,6 +57,26 @@ export type TickerUpdate = {
   timestamp: number
   volume: number
 }
+
+export type TickerMessage = {
+  event: 'ticker'
+  data: TickerUpdate
+}
+
+export type StreamMessage =
+  | TickerMessage
+  | {
+      event: 'ready'
+      data?: {
+        symbols?: string[]
+      }
+    }
+  | {
+      event: 'error'
+      data?: {
+        message?: string
+      }
+    }
 
 export type QuotesResponse = {
   quotes: Quote[]

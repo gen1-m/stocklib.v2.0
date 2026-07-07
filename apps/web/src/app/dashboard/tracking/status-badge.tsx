@@ -8,6 +8,8 @@ function getStatusStyles(status: TickerStatus) {
   switch (status) {
     case 'live':
       return 'border-green-500/20 bg-green-500/10 text-green-600'
+    case 'reconnecting':
+      return 'border-amber-500/20 bg-amber-500/10 text-amber-600'
     case 'error':
       return 'border-red-500/20 bg-red-500/10 text-red-600'
     default:
@@ -19,8 +21,10 @@ function getStatusLabel(status: TickerStatus) {
   switch (status) {
     case 'live':
       return 'Live'
-    case 'error':
+    case 'reconnecting':
       return 'Reconnecting'
+    case 'error':
+      return 'Error'
     default:
       return 'Waiting'
   }
