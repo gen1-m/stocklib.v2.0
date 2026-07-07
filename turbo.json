@@ -3,7 +3,12 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**", "build/**"]
+      "outputs": [".next/**", "!.next/cache/**", "dist/**", "build/**"],
+      "env": [
+        "FINNHUB_API_KEY", 
+        "SUPABASE_SERVICE_ROLE_KEY", 
+        "CORS_ORIGIN" 
+      ]
     },
     "dev": {
       "cache": false,
