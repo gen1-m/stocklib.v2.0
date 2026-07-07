@@ -1,0 +1,12 @@
+name = "stocklib-realtime"
+main = "src/index.ts"
+compatibility_date = "2026-07-06"
+
+[durable_objects]
+bindings = [
+  { name = "STREAM_ROOM", class_name = "StreamRoom" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["StreamRoom"]

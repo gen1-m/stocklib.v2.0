@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import type { AssetDetailsResponse } from '../asset-types'
+
 import {
   formatDate,
   formatDateTimeFromUnix,
@@ -107,16 +108,62 @@ async function getAssetDetails(symbol: string): Promise<AssetDetailsResponse> {
     throw new Error('Missing NEXT_PUBLIC_REALTIME_URL')
   }
 
-  const response = await fetch(
-    `${realtimeBase}/asset?symbol=${encodeURIComponent(symbol)}`,
-    { cache: 'no-store' }
-  )
+  const encoded = encodeURIComponent(symbol)
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch asset details for ${symbol}`)
+  const [quotesResult, profilesResult, newsResult, financialsResult, recommendationsResult] =
+    await Promise.allSettled([
+      fetch(`${realtimeBase}/quotes?symbols=${encoded}`, { next: { revalidate: 15 } }),
+      fetch(`${realtimeBase}/profiles?symbols=${encoded}`, { next: { revalidate: 86400 } }),
+      fetch(`${realtimeBase}/news?symbol=${encoded}`, { next: { revalidate: 120 } }),
+      fetch(`${realtimeBase}/financials?symbol=${encoded}`, { next: { revalidate: 21600 } }),
+      fetch(`${realtimeBase}/recommendations?symbol=${encoded}`, { next: { revalidate: 3600 } }),
+    ])
+
+  const quotesData =
+    quotesResult.status === 'fulfilled' && quotesResult.value.ok
+      ? await quotesResult.value.json()
+      : { quotes: [] }
+
+  const profilesData =
+    profilesResult.status === 'fulfilled' && profilesResult.value.ok
+      ? await profilesResult.value.json()
+      : { profiles: [] }
+
+  const newsData =
+    newsResult.status === 'fulfilled' && newsResult.value.ok
+      ? await newsResult.value.json()
+      : { news: [] }
+
+  const financialsData =
+    financialsResult.status === 'fulfilled' && financialsResult.value.ok
+      ? await financialsResult.value.json()
+      : { basicFinancials: { metric: {} }, financialsReported: { data: [] } }
+
+  const recommendationsData =
+    recommendationsResult.status === 'fulfilled' && recommendationsResult.value.ok
+      ? await recommendationsResult.value.json()
+      : { recommendations: [] }
+
+  const quote = quotesData.quotes?.[0]
+
+  return {
+    symbol,
+    profile: profilesData.profiles?.[0] ?? {},
+    quote: {
+      c: quote?.price ?? null,
+      d: quote?.change ?? null,
+      dp: quote?.percentChange ?? null,
+      h: quote?.high ?? null,
+      l: quote?.low ?? null,
+      o: quote?.open ?? null,
+      pc: quote?.previousClose ?? null,
+      t: quote?.timestamp ? Math.floor(quote.timestamp / 1000) : undefined,
+    },
+    news: newsData.news ?? [],
+    basicFinancials: financialsData.basicFinancials ?? { metric: {} },
+    financialsReported: financialsData.financialsReported ?? { data: [] },
+    recommendations: recommendationsData.recommendations ?? [],
   }
-
-  return response.json()
 }
 
 export default async function AssetDetailPage({ params }: PageProps) {

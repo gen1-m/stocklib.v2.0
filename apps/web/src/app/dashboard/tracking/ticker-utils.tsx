@@ -1,5 +1,6 @@
 import type {
   CompanyProfile,
+  PendingTickerUpdates,
   Quote,
   Ticker,
   TickerUpdate,
@@ -10,18 +11,49 @@ export function createInitialTickers(symbols: string[]): Ticker[] {
     symbol,
     name: symbol,
     ticker: symbol,
+    currency: null,
+    exchange: null,
+    finnhubIndustry: null,
+    logo: null,
+    marketCapitalization: null,
+    country: null,
+    ipo: null,
+    weburl: null,
     price: null,
+    change: null,
+    percentChange: null,
+    high: null,
+    low: null,
+    open: null,
+    previousClose: null,
+    timestamp: null,
+    volume: null,
     status: 'waiting',
   }))
 }
 
 export function buildTickerUrl(
   base: string,
-  path: 'quotes' | 'stream' | 'profiles',
-  symbols: string[]
+  path: 'quotes' | 'profiles' | 'market-status' | 'asset' | 'search',
+  symbols?: string[]
 ) {
-  const params = encodeURIComponent(symbols.join(','))
-  return `${base}/${path}?symbols=${params}`
+  const url = new URL(`${base}/${path}`)
+
+  if (symbols?.length) {
+    url.searchParams.set('symbols', symbols.join(','))
+  }
+
+  return url.toString()
+}
+
+export function buildWebSocketUrl(base: string, symbols: string[]) {
+  const httpUrl = new URL(base)
+  const protocol = httpUrl.protocol === 'https:' ? 'wss:' : 'ws:'
+  const wsUrl = new URL(httpUrl.toString())
+  wsUrl.protocol = protocol
+  wsUrl.pathname = `${wsUrl.pathname.replace(/\/$/, '')}/ws`
+  wsUrl.searchParams.set('symbols', symbols.join(','))
+  return wsUrl.toString()
 }
 
 export function applyQuote(ticker: Ticker, quote?: Quote): Ticker {
@@ -29,15 +61,15 @@ export function applyQuote(ticker: Ticker, quote?: Quote): Ticker {
 
   return {
     ...ticker,
-    price: quote.price,
-    change: quote.change,
-    percentChange: quote.percentChange,
-    high: quote.high,
-    low: quote.low,
-    open: quote.open,
-    previousClose: quote.previousClose,
-    timestamp: quote.timestamp,
-    status: quote.price !== null ? 'live' : 'waiting',
+    price: quote.price ?? null,
+    change: quote.change ?? null,
+    percentChange: quote.percentChange ?? null,
+    high: quote.high ?? null,
+    low: quote.low ?? null,
+    open: quote.open ?? null,
+    previousClose: quote.previousClose ?? null,
+    timestamp: quote.timestamp ?? null,
+    status: quote.price !== null ? 'live' : ticker.status,
   }
 }
 
@@ -46,12 +78,16 @@ export function applyProfile(ticker: Ticker, profile?: CompanyProfile): Ticker {
 
   return {
     ...ticker,
-    name: profile.name,
-    ticker: profile.ticker,
-    currency: profile.currency,
-    exchange: profile.exchange,
-    finnhubIndustry: profile.finnhubIndustry,
-    logo: profile.logo,
+    name: profile.name ?? ticker.name,
+    ticker: profile.ticker ?? ticker.ticker,
+    currency: profile.currency ?? null,
+    exchange: profile.exchange ?? null,
+    finnhubIndustry: profile.finnhubIndustry ?? null,
+    logo: profile.logo ?? null,
+    marketCapitalization: profile.marketCapitalization ?? null,
+    country: profile.country ?? null,
+    ipo: profile.ipo ?? null,
+    weburl: profile.weburl ?? null,
   }
 }
 
@@ -65,6 +101,16 @@ export function applyUpdate(ticker: Ticker, update: TickerUpdate): Ticker {
     volume: update.volume,
     status: 'live',
   }
+}
+
+export function applyPendingTickerUpdates(
+  tickers: Ticker[],
+  updates: PendingTickerUpdates
+): Ticker[] {
+  return tickers.map((ticker) => {
+    const update = updates[ticker.symbol]
+    return update ? applyUpdate(ticker, update) : ticker
+  })
 }
 
 export function getPercentChangeClass(percentChange?: number | null) {
@@ -81,8 +127,8 @@ export function getValueToneClass(value?: number | null) {
 }
 
 export function formatPrice(price: number | null | undefined, currency?: string | null) {
-  if (price === null) return '—'
-  return `${price?.toFixed(2)}${currency ? ` ${currency}` : ''}`
+  if (price === null || price === undefined) return '—'
+  return `${price.toFixed(2)}${currency ? ` ${currency}` : ''}`
 }
 
 export function formatPlainPrice(price: number | null) {
@@ -107,7 +153,7 @@ export function formatPercentChange(percentChange?: number | null) {
   return `${sign}${percentChange.toFixed(2)}%`
 }
 
-export function formatTimestamp(timestamp?: number) {
+export function formatTimestamp(timestamp?: number | null) {
   if (!timestamp) {
     return 'Waiting for live data'
   }
@@ -123,7 +169,12 @@ export function formatNumber(value?: number | null) {
 export function formatMarketCap(value?: number | null) {
   if (value === null || value === undefined) return '—'
   value = value * 1_000_000
-  return value.toLocaleString('en-US', {style: 'currency', currency: 'USD', compactDisplay: 'short', notation: 'compact'})
+  return value.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    compactDisplay: 'short',
+    notation: 'compact',
+  })
 }
 
 export function formatPercent(value?: number | null) {

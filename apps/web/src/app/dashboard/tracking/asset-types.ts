@@ -79,3 +79,37 @@ export type AssetDetailsResponse = {
   financialsReported: FinancialsReportedResponse
   recommendations: RecommendationTrendItem[]
 }
+
+export type QuotesEndpointResponse = {
+  quotes: Array<{
+    symbol: string
+    price: number | null
+    change: number | null
+    percentChange: number | null
+    high: number | null
+    low: number | null
+    open: number | null
+    previousClose: number | null
+    timestamp?: number
+  }>
+}
+
+export type ProfilesEndpointResponse = {
+  profiles: Array<AssetProfile & { symbol: string }>
+}
+
+export type NewsEndpointResponse = {
+  symbol: string
+  news: AssetNewsItem[]
+}
+
+export type FinancialsEndpointResponse = {
+  symbol: string
+  basicFinancials: BasicFinancialsResponse
+  financialsReported: FinancialsReportedResponse
+}
+
+export type RecommendationsEndpointResponse = {
+  symbol: string
+  recommendations: RecommendationTrendItem[]
+}
