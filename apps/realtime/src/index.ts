@@ -272,6 +272,8 @@ export default {
             }
 
             if (url.pathname === '/news') {
+                console.log('NEWS ROUTE HIT', url.toString())
+                
                 const symbol = getSingleSymbol(url)
 
                 if (!symbol) {
@@ -295,6 +297,8 @@ export default {
                         env,
                         []
                     )
+                    // ----------------- TEMPORARY -------------
+                    console.log('Finnhub news item:', newsData[0])
 
                     const payload = {
                         symbol,
@@ -311,8 +315,8 @@ export default {
                             }))
                             : [],
                     }
-
-                    cacheSet(cacheKey, payload, 120_000)
+                    // ----------------- TEMPORARY to 1_000 from 120_000 -------------
+                    cacheSet(cacheKey, payload, 1_000)
                     return json(payload, request)
                 } catch (error) {
                     return json(
