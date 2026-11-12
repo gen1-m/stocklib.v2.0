@@ -1,21 +1,8 @@
-import type { StreamRoom } from './stream-room'
 import * as types from './types'
-
 
 export { StreamRoom } from './stream-room'
 
-
-type Env = {
-    STREAM_ROOM: DurableObjectNamespace<StreamRoom>
-    FINNHUB_API_KEY: string
-}
-
-type CacheEntry<T> = {
-    value: T
-    expiresAt: number
-}
-
-const cache = new Map<string, CacheEntry<unknown>>()
+const cache = new Map<string, types.CacheEntry<unknown>>()
 
 function cacheGet<T>(key: string): T | null {
     const entry = cache.get(key)
@@ -56,7 +43,8 @@ function json(data: unknown, request: Request, init?: ResponseInit) {
     })
 }
 
-async function fetchFinnhub<T>(path: string, env: Env, fallback?: T): Promise<T> {
+// --------------------- Helper for fetching from Finnhub API -------------------------
+async function fetchFinnhub<T>(path: string, env: types.Env, fallback?: T): Promise<T> {
     try {
         const response = await fetch(`https://finnhub.io/api/v1/${path}`, {
             headers: {
@@ -92,8 +80,45 @@ function getSingleSymbol(url: URL) {
     return (url.searchParams.get('symbol') ?? '').trim().toUpperCase()
 }
 
+// --------------------- Helper for fetching from TwelveData API -------------------------
+async function fetchTwelveData<T>(
+    params: Record<string, string>,
+    env: types.Env
+): Promise<T> {
+    const query = new URLSearchParams({
+        ...params,
+        apikey: env.TWELVE_DATA_API_KEY,
+    })
+
+    const response = await fetch(
+        `https://api.twelvedata.com/time_series?${query.toString()}`
+    )
+
+    if (!response.ok) {
+        throw new Error(`Twelve Data request failed (${response.status})`)
+    }
+
+    const data = await response.json()
+
+    if (
+        typeof data === 'object' &&
+        data !== null &&
+        'status' in data &&
+        data.status === 'error'
+    ) {
+        throw new Error(
+            'message' in data && typeof data.message === 'string'
+                ? data.message
+                : 'Twelve Data request failed'
+        )
+    }
+
+    return data as T
+}
+
 export default {
-    async fetch(request: Request, env: Env): Promise<Response> {
+    // --------------------- Actual Fetching -------------------------
+    async fetch(request: Request, env: types.Env): Promise<Response> {
         try {
             if (request.method === 'OPTIONS') {
                 return new Response(null, {
@@ -108,10 +133,13 @@ export default {
 
             const url = new URL(request.url)
 
+            // --------------------- Getting the responses from the individual routes -------------------------
+            // Health
             if (url.pathname === '/health') {
                 return json({ ok: true }, request, { status: 200 })
             }
 
+            // Market Status
             if (url.pathname === '/market-status') {
                 const exchange = (url.searchParams.get('exchange') ?? 'US').trim().toUpperCase()
                 const cacheKey = `market-status:${exchange}`
@@ -157,6 +185,7 @@ export default {
                 }
             }
 
+            // Quotes
             if (url.pathname === '/quotes') {
                 const symbols = getSymbols(url)
 
@@ -221,6 +250,7 @@ export default {
                 }
             }
 
+            // Profiles
             if (url.pathname === '/profiles') {
                 const symbols = getSymbols(url)
 
@@ -271,9 +301,8 @@ export default {
                 }
             }
 
-            if (url.pathname === '/news') {
-                console.log('NEWS ROUTE HIT', url.toString())
-                
+            // News
+            if (url.pathname === '/news') {                
                 const symbol = getSingleSymbol(url)
 
                 if (!symbol) {
@@ -297,8 +326,6 @@ export default {
                         env,
                         []
                     )
-                    // ----------------- TEMPORARY -------------
-                    console.log('Finnhub news item:', newsData[0])
 
                     const payload = {
                         symbol,
@@ -315,8 +342,7 @@ export default {
                             }))
                             : [],
                     }
-                    // ----------------- TEMPORARY to 1_000 from 120_000 -------------
-                    cacheSet(cacheKey, payload, 1_000)
+                    cacheSet(cacheKey, payload, 120_000)
                     return json(payload, request)
                 } catch (error) {
                     return json(
@@ -330,6 +356,7 @@ export default {
                 }
             }
 
+            // Financials
             if (url.pathname === '/financials') {
                 const symbol = getSingleSymbol(url)
 
@@ -379,6 +406,7 @@ export default {
                 }
             }
 
+            // Recommendations
             if (url.pathname === '/recommendations') {
                 const symbol = getSingleSymbol(url)
 
@@ -419,6 +447,7 @@ export default {
                 }
             }
 
+            // Assets
             if (url.pathname === '/asset') {
                 const symbol = getSingleSymbol(url)
 
@@ -469,6 +498,7 @@ export default {
                 }
             }
 
+            // Search
             if (url.pathname === '/search') {
                 const q = (url.searchParams.get('q') ?? '').trim()
 
@@ -553,6 +583,7 @@ export default {
                 }
             }
 
+            // Websocket
             if (url.pathname === '/ws') {
                 const symbols = getSymbols(url).sort()
 
@@ -569,6 +600,137 @@ export default {
                 const stub = env.STREAM_ROOM.get(id)
 
                 return stub.fetch(request)
+            }
+            
+            // ------------------------------------ TwelveData -------------------------------------
+            // Historical
+            if (url.pathname === '/historical') {
+                const symbol = getSingleSymbol(url)
+                const range = (url.searchParams.get('range') ?? '1Y').toUpperCase()
+
+                if (!symbol) {
+                    return json(
+                        { error: 'Missing symbol query param' },
+                        request,
+                        { status: 400 }
+                    )
+                }
+
+                const ranges: Record<string, {
+                    interval: '1day' | '1week'
+                    outputsize: number
+                }> = {
+                    '1M': {
+                        interval: '1day',
+                        outputsize: 30,
+                    },
+                    '6M': {
+                        interval: '1day',
+                        outputsize: 180,
+                    },
+                    '1Y': {
+                        interval: '1day',
+                        outputsize: 365,
+                    },
+                    '5Y': {
+                        interval: '1day',
+                        outputsize: 1305,
+                    },
+                    MAX: {
+                        interval: '1week',
+                        outputsize: 5000,
+                    },
+                }
+
+                const config = ranges[range]
+
+                if (!config) {
+                    return json(
+                        {
+                            error: 'Invalid range',
+                            supportedRanges: Object.keys(ranges),
+                        },
+                        request,
+                        { status: 400 }
+                    )
+                }
+
+                const cacheKey = `historical:${symbol}:${range}`
+
+                const cached = cacheGet<{
+                    symbol: string
+                    range: string
+                    interval: string
+                    data: types.HistoricalCandle[]
+                }>(cacheKey)
+
+                if (cached) {
+                    return json(cached, request)
+                }
+
+                try {
+                    const data = await fetchTwelveData<{
+                        values?: Array<{
+                            datetime: string
+                            open: string
+                            high: string
+                            low: string
+                            close: string
+                            volume?: string
+                        }>
+                    }>(
+                        {
+                            symbol,
+                            interval: config.interval,
+                            outputsize: String(config.outputsize),
+                            order: 'asc',
+                        },
+                        env
+                    )
+
+                    const candles: types.HistoricalCandle[] = (data.values ?? [])
+                        .map((item) => ({
+                            timestamp: Math.floor(
+                                new Date(item.datetime).getTime() / 1000
+                            ),
+                            open: Number(item.open),
+                            high: Number(item.high),
+                            low: Number(item.low),
+                            close: Number(item.close),
+                            volume: item.volume ? Number(item.volume) : null,
+                        }))
+                        .filter(
+                            (item) =>
+                                Number.isFinite(item.timestamp) &&
+                                Number.isFinite(item.open) &&
+                                Number.isFinite(item.high) &&
+                                Number.isFinite(item.low) &&
+                                Number.isFinite(item.close)
+                        )
+
+                    const payload = {
+                        symbol,
+                        range,
+                        interval: config.interval,
+                        data: candles,
+                    }
+
+                    cacheSet(cacheKey, payload, 60 * 60 * 1000)
+
+                    return json(payload, request)
+                } catch (error) {
+                    return json(
+                        {
+                            error: 'Failed to fetch historical data',
+                            details:
+                                error instanceof Error
+                                    ? error.message
+                                    : 'Unknown error',
+                        },
+                        request,
+                        { status: 500 }
+                    )
+                }
             }
 
             return json({ error: 'Not found' }, request, { status: 404 })

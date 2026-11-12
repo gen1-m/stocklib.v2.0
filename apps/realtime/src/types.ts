@@ -1,3 +1,5 @@
+import type { StreamRoom } from './stream-room'
+
 export type FinnhubTrade = {
   p: number
   s: string
@@ -112,4 +114,24 @@ export type FinnhubNewsItem = {
   source?: string
   summary?: string
   url?: string
+}
+
+export type HistoricalCandle = {
+    timestamp: number
+    open: number
+    high: number
+    low: number
+    close: number
+    volume: number | null
+}
+
+export type Env = {
+    STREAM_ROOM: DurableObjectNamespace<StreamRoom>
+    FINNHUB_API_KEY: string
+    TWELVE_DATA_API_KEY: string
+}
+
+export type CacheEntry<T> = {
+    value: T
+    expiresAt: number
 }
