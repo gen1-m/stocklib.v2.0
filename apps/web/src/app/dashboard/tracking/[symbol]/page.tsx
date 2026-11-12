@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import type { AssetDetailsResponse } from '../asset-types'
+import HistoricalPriceChart from './historical-price-chart'
 
 import {
   formatDate,
@@ -265,6 +266,9 @@ export default async function AssetDetailPage({ params }: PageProps) {
           ) : null}
         </div>
       </section>
+      <p>{symbol}</p>
+      <HistoricalPriceChart symbol={symbol} />
+
 
       <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="rounded-3xl border border-border bg-surface p-6">
