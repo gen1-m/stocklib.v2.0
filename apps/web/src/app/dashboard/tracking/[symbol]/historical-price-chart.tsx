@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import {
     createChart,
-    LineSeries,
     ColorType,
+    AreaSeries,
     type IChartApi,
     type ISeriesApi,
     type UTCTimestamp,
@@ -44,7 +44,7 @@ const usdFormatter = new Intl.NumberFormat('en-US', {
 export default function HistoricalPriceChart({ symbol }: Props) {
     const chartContainerRef = useRef<HTMLDivElement>(null)
     const chartRef = useRef<IChartApi | null>(null)
-    const seriesRef = useRef<ISeriesApi<'Line'> | null>(null)
+    const seriesRef = useRef<ISeriesApi<'Area'> | null>(null)
 
     const [range, setRange] = useState<Range>('1Y')
     const [loading, setLoading] = useState(true)
@@ -80,16 +80,36 @@ export default function HistoricalPriceChart({ symbol }: Props) {
 
             rightPriceScale: {
                 borderVisible: false,
+                scaleMargins: {
+                    top: 0.15,
+                    bottom: 0.15,
+                },
+                mode: 0,
             },
 
             timeScale: {
                 borderVisible: false,
                 timeVisible: false,
+                rightOffset: 10,
+                barSpacing: 6,
+            },
+
+            crosshair: {
+                vertLine: {
+                    labelVisible: true,
+                },
+                horzLine: {
+                    labelVisible: true,
+                },
             },
         })
 
-        const series = chart.addSeries(LineSeries, {
+        const series = chart.addSeries(AreaSeries, {
             lineWidth: 2,
+
+            topColor: 'rgba(59, 130, 246, 0.25)',
+            bottomColor: 'rgba(59, 130, 246, 0.00)',
+            lineColor: '#3b82f6',
 
             priceFormat: {
                 type: 'price',
@@ -159,6 +179,18 @@ export default function HistoricalPriceChart({ symbol }: Props) {
 
                 // Fit the chart to the new range
                 chartRef.current.timeScale().fitContent()
+
+                const prices = result.data.map((item) => item.close)
+
+                const minPrice = Math.min(...prices)
+                const maxPrice = Math.max(...prices)
+
+                const padding = (maxPrice - minPrice) * 0.1
+
+                chartRef.current.priceScale('right').setVisibleRange({
+                    from: Math.max(0, minPrice - padding),
+                    to: maxPrice + padding,
+                })
             } catch (error) {
                 console.error(error)
             } finally {
@@ -177,11 +209,10 @@ export default function HistoricalPriceChart({ symbol }: Props) {
                     <button
                         key={item}
                         onClick={() => setRange(item)}
-                        className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
-                            range === item
-                                ? 'bg-white text-black'
-                                : 'text-gray-400 hover:bg-white/5 hover:text-white'
-                        }`}
+                        className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${range === item
+                            ? 'bg-white text-black shadow-sm'
+                            : 'text-gray-500 hover:bg-white/5 hover:text-gray-200'
+                            }`}
                     >
                         {item}
                     </button>
@@ -189,9 +220,9 @@ export default function HistoricalPriceChart({ symbol }: Props) {
             </div>
 
             {/* Chart */}
-            <div className="relative">
+            <div className="relative rounded-xl border border-white/5 bg-white/2 ">
                 {loading && (
-                    <div className="absolute inset-0 z-10 flex items-center justify-center">
+                    <div className="flex items-center justify-center max-w-fit">
                         <span className="text-sm text-gray-400">
                             Loading...
                         </span>
